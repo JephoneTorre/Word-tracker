@@ -11,137 +11,236 @@ from nlp_analyzer import RepetitionDetector
 # --- Streamlit Page Config ---
 st.set_page_config(page_title="Speech Coach AI", page_icon="🎙️", layout="wide")
 
-st.title("🎙️ Real-time Speech Coach")
-st.markdown("Detects redundant words, filler words, and repetitions.")
+# --- Custom Rich UI Aesthetics ---
+st.markdown("""
+<style>
+/* Base Dark Theme Overrides */
+.stApp {
+    background-color: #0b0f19;
+}
+h1, h2, h3 {
+    color: #e2e8f0 !important;
+    font-family: 'Inter', sans-serif;
+}
+/* Live Transcript Styling */
+.transcript-box {
+    font-size: 1.4rem;
+    padding: 24px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 16px;
+    border-left: 6px solid #3b82f6;
+    color: #f8fafc;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    transition: all 0.3s ease;
+    line-height: 1.6;
+}
+/* Stacking Alerts System */
+.alert-filler {
+    background: linear-gradient(90deg, rgba(234, 179, 8, 0.1) 0%, transparent 100%);
+    border-left: 4px solid #eab308;
+    padding: 14px 20px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    color: #fef08a;
+    font-size: 1.1rem;
+    letter-spacing: 0.5px;
+    animation: slideFadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.alert-warning {
+    background: linear-gradient(90deg, rgba(249, 115, 22, 0.15) 0%, transparent 100%);
+    border-left: 4px solid #f97316;
+    padding: 14px 20px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    color: #fdba74;
+    font-size: 1.1rem;
+    letter-spacing: 0.5px;
+    animation: slideFadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.alert-concern {
+    background: linear-gradient(90deg, rgba(239, 68, 68, 0.2) 0%, transparent 100%);
+    border-left: 4px solid #ef4444;
+    padding: 14px 20px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    color: #fca5a5;
+    font-size: 1.1rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    animation: slideFadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.alert-critical {
+    background: linear-gradient(90deg, rgba(220, 38, 38, 0.3) 0%, transparent 100%);
+    border-left: 6px solid #dc2626;
+    padding: 16px 20px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    color: #fecaca;
+    font-size: 1.2rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.15);
+    animation: shakePulse 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
 
-# --- Session State Initialization ---
+/* Animations */
+@keyframes slideFadeIn {
+    0% { transform: translateX(30px); opacity: 0; }
+    100% { transform: translateX(0); opacity: 1; }
+}
+@keyframes shakePulse {
+    0%, 100% { transform: scale(1) translateX(0); opacity: 1; }
+    25% { transform: scale(1.02) translateX(-5px); }
+    50% { transform: scale(1.02) translateX(5px); }
+    75% { transform: scale(1.02) translateX(-5px); }
+}
+</style>
+""", unsafe_allow_html=True)
+
+st.title("🎙️ Dynamic Voice Analysis")
+st.markdown("<p style='color: #94a3b8; font-size: 1.1rem; margin-bottom: 2rem;'>A smart coaching assistant with stacking visual notifications for recurring words.</p>", unsafe_allow_html=True)
+
+# --- Session States ---
 if 'logs' not in st.session_state:
     st.session_state.logs = []
+if 'latest_transcript' not in st.session_state:
+    st.session_state.latest_transcript = "Waiting for speech..."
 if 'is_running' not in st.session_state:
     st.session_state.is_running = False
 if 'audio_queue' not in st.session_state:
     st.session_state.audio_queue = queue.Queue()
+if 'alert_stack' not in st.session_state:
+    st.session_state.alert_stack = []
     
 @st.cache_resource
 def load_models():
-    # Cache prevents reloading Whisper on every single Streamlit re-run
     transcriber = SpeechTranscriber(model_size="base")
-    detector = RepetitionDetector(window_size=15)
+    detector = RepetitionDetector(window_size=20) # 20 second rolling window
     chunker = AudioChunker(samplerate=16000, energy_threshold=0.015, silence_duration=1.0)
     return transcriber, detector, chunker
 
 transcriber, detector, chunker = load_models()
-# Override thread queue into Streamlit Session queue so the data persists across re-runs
 chunker.q = st.session_state.audio_queue
 
-# --- Dashboard Layout: Tabs ---
-tab1, tab2 = st.tabs(["🔴 Live Microphone", "📁 Upload Audio"])
+# --- User Interface Structure ---
+left_col, right_col = st.columns([1.2, 0.8], gap="large")
 
-with tab1:
-    st.subheader("Live Audio Streaming")
-    st.markdown("**(Requires a connected microphone)**")
-    col1, col2, col3 = st.columns([1,1,2])
+with left_col:
+    # --- Live Engine Controls ---
+    control_container = st.container()
+    col1, col2, col3 = control_container.columns([1,1,1])
     with col1:
-        if st.button("Start Listening", type="primary", use_container_width=True, disabled=st.session_state.is_running):
+        if st.button("🔴 Start Listening", type="primary", use_container_width=True, disabled=st.session_state.is_running):
             st.session_state.is_running = True
             chunker.start()
             st.rerun()
     with col2:
-        if st.button("Stop Listening", use_container_width=True, disabled=not st.session_state.is_running):
+        if st.button("⏹ Stop Listening", use_container_width=True, disabled=not st.session_state.is_running):
             st.session_state.is_running = False
             chunker.stop()
             st.rerun()
     with col3:
-        if st.button("Clear History", key="clear_live", use_container_width=True):
+        if st.button("🗑 Clear Session", use_container_width=True):
             st.session_state.logs = []
+            st.session_state.alert_stack = []
+            st.session_state.latest_transcript = "Waiting for speech..."
             chunker.q.queue.clear()
             st.rerun()
 
-    # --- Placeholder for Real-time Status ---
     status_text = st.empty()
     if st.session_state.is_running:
-        status_text.info("🎙️ Listening... Speak into your microphone.")
-    else:
-        status_text.warning("🛑 Stopped.")
-
-with tab2:
-    st.subheader("Audio File Upload")
-    st.markdown("Upload a **.wav** file to transcribe and analyze its contents. *(We restrict to .wav to bypass needing ffmpeg installed on Windows)*")
+        status_text.markdown("&nbsp;&nbsp;🟢 **Active:** Processing real-time audio chunking...")
+        
+    st.markdown("### 📝 Live Transcript")
+    # Live Floating Output Box
+    transcript_placeholder = st.empty()
+    transcript_placeholder.markdown(f"<div class='transcript-box'>{st.session_state.latest_transcript}</div>", unsafe_allow_html=True)
     
-    uploaded_file = st.file_uploader("Upload an audio file (.wav)", type=["wav"])
+    st.markdown("---")
+    st.markdown("### 📁 Or Upload an Audio (.wav)")
+    uploaded_file = st.file_uploader("Analyzes full offline files", type=["wav"], label_visibility="collapsed")
     
-    if st.button("Analyze Uploaded File", type="primary", key="btn_upload") and uploaded_file is not None:
-        with st.spinner("Transcribing and Analyzing Audio... Please wait."):
-            # Save uploaded file to a temporary file
+    if st.button("Upload & Analyze", type="primary") and uploaded_file is not None:
+        with st.spinner("Processing file through Whisper..."):
             with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
                 tmp.write(uploaded_file.getvalue())
                 tmp_path = tmp.name
             
-            # Use the whisper model to transcribe the entire file at once
-            # transcriber.py was natively upgraded to handle .wav using Scipy natively!
             text = transcriber.transcribe(tmp_path)
-            
-            # Clean up temp file safely
             try:
                 os.remove(tmp_path)
             except:
                 pass
             
             if text.strip():
-                # We analyze it. 
+                st.session_state.latest_transcript = text
                 warnings = detector.analyze(text)
-                st.session_state.logs.insert(0, {"text": f"[UPLOADED AUDIO] {text}", "warnings": warnings})
-                st.success("Analysis Complete!")
-            else:
-                st.error("No speech detected in the uploaded file.")
+                
+                # Push to global logs
+                st.session_state.logs.insert(0, {"text": text, "warnings": warnings})
+                
+                # Push newest warnings to alert stack
+                for w in warnings:
+                    st.session_state.alert_stack.insert(0, w)
+                    # Use Streamlit Toasts natively for floating popups
+                    icon = "🟡" if w['level'] in ['filler','warning'] else "🟠" if w['level'] == 'concern' else "🚨"
+                    st.toast(w['message'], icon=icon)
+                st.rerun()
 
-st.divider()
+with right_col:
+    st.markdown("### 🔔 Event Stack")
+    st.markdown("<p style='color: #64748b; font-size: 0.9rem'>Alerts auto-aggregate dynamically as repetitions escalate.</p>", unsafe_allow_html=True)
+    
+    # Render Dashboard Stats
+    stat1, stat2 = st.columns(2)
+    stat1.metric("Lines Spoken", len(st.session_state.logs))
+    stat2.metric("Total Flags", sum([len(l['warnings']) for l in st.session_state.logs]))
+    
+    st.markdown("<br/>", unsafe_allow_html=True)
+    
+    # Render escalating notification blocks
+    alert_placeholder = st.empty()
+    alert_html = ""
+    # We only show the latest 8 alerts on screen to keep the dashboard clean
+    for w in st.session_state.alert_stack[:8]:
+        css_class = f"alert-{w['level']}"
+        alert_html += f"<div class='{css_class}'>{w['message']}</div>"
+    
+    if not alert_html:
+        alert_html = "<div style='color: #475569; padding: 20px; border: 1px dashed #334155; border-radius: 8px; text-align: center'>No repetitions logged yet.</div>"
+        
+    alert_placeholder.markdown(alert_html, unsafe_allow_html=True)
 
-col_stats, col_logs = st.columns([1, 2])
-
-# Background fetcher to maintain UI responsiveness for live mode
+# --- Background Worker Processor ---
 if st.session_state.is_running:
     try:
-        # Check audio chunk queue briefly
+        # Check audio queue briefly
         audio_chunk = st.session_state.audio_queue.get(timeout=0.1)
         
         with status_text.container():
-            st.info("⏳ Processing audio chunk...")
-            text = transcriber.transcribe(audio_chunk)
+            st.markdown("&nbsp;&nbsp;⏳ **Computing:** Whisper is transcribing chunk...")
+        text = transcriber.transcribe(audio_chunk)
             
         if text.strip():
+            # Update Live Session Text
+            st.session_state.latest_transcript = text
+            
+            # Send through NLP Engine
             warnings = detector.analyze(text)
-            # Insert at the beginning so newest is on top
+            
             st.session_state.logs.insert(0, {"text": text, "warnings": warnings})
             
+            # Stacking Alerts Generation
+            if warnings:
+                for w in warnings:
+                    st.session_state.alert_stack.insert(0, w)
+                    # Trigger floating OS-level toast
+                    icon = "🟡" if w['level'] in ['filler','warning'] else "🟠" if w['level'] == 'concern' else "🚨"
+                    st.toast(w['message'], icon=icon)
+                    
     except queue.Empty:
         pass
         
-    # Introduce small delay and immediately re-run to simulate listening loop
-    time.sleep(0.5)
+    time.sleep(0.3)
     st.rerun()
-
-# Compile statistics
-total_fillers = 0
-total_repetitions = 0
-for log in st.session_state.logs:
-    for w in log['warnings']:
-        if "Filler" in w:
-            total_fillers += 1
-        elif "repetition" in w:
-            total_repetitions += 1
-
-with col_stats:
-    st.subheader("Statistics")
-    st.metric(label="Total Utterances", value=len(st.session_state.logs))
-    st.metric(label="Filler Words Detected", value=total_fillers)
-    st.metric(label="Repetitions Detected", value=total_repetitions)
-
-with col_logs:
-    st.subheader("Transcription & Feedback Log")
-    for log in st.session_state.logs:
-        st.markdown(f"**Transcript:** {log['text']}")
-        if log['warnings']:
-            for w in log['warnings']:
-                st.error(f"⚠️ {w}")
-        st.markdown("---")
