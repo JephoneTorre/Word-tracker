@@ -1,0 +1,7 @@
+sounddevice
+numpy
+openai-whisper
+nltk
+streamlit
+SpeechRecognition
+soundfile
