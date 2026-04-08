@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "Voice Repetition Detector",
+  "version": "1.0",
+  "description": "Real-Time speech coach that detects repeated words and displays dynamic escalating visual alerts overlaying your current webpage.",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": ["<all_urls>"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Toggle Speech Coach"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "css": ["content.css"],
+      "js": ["content.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ]
+}

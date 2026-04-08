@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Speech Coach</title>
+  <style>
+    body { 
+      width: 320px; 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Tahoma, sans-serif; 
+      padding: 16px; 
+      background: #0f172a; /* Dark sleek */
+      color: white; 
+      margin: 0; 
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .header {
+      text-align: center;
+    }
+    h3 { 
+      margin: 0 0 4px; 
+      color: #f8fafc; 
+      font-size: 18px; 
+      font-weight: 700; 
+      letter-spacing: 0.5px;
+    }
+    p.subtitle { 
+      margin: 0; 
+      color: #94a3b8; 
+      font-size: 12px; 
+      line-height: 1.4;
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-top: 8px;
+    }
+    .status-badge.stopped { background: rgba(148, 163, 184, 0.1); color: #cbd5e1; }
+    .status-badge.running { background: rgba(59, 130, 246, 0.15); color: #60a5fa; box-shadow: 0 0 8px rgba(59, 130, 246, 0.3); }
+
+    .score-card {
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(16, 185, 129, 0.1));
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+      border: 1px solid rgba(59, 130, 246, 0.2);
+    }
+    .score-title { font-size: 12px; font-weight: 700; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.5px; }
+    .score-val { font-size: 24px; font-weight: 800; color: #10b981; margin: 4px 0; }
+
+    .stats-card {
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 12px;
+      padding: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      padding-bottom: 12px;
+      margin-bottom: 12px;
+    }
+    .stat { display: flex; flex-direction: column; gap: 2px; }
+    .stat-label { font-size: 11px; color: #94a3b8; }
+    .stat-val { font-size: 16px; font-weight: 700; color: #e2e8f0; }
+    
+    .top-words {
+      padding-top: 4px;
+    }
+    .top-words-title {
+      font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: 700; margin-bottom: 8px; letter-spacing: 0.5px; display: flex; justify-content: space-between;
+    }
+    .word-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .word-pill {
+      background: rgba(255, 255, 255, 0.06);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      color: #f1f5f9;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .word-pill span {
+      background: rgba(239, 68, 68, 0.2);
+      color: #fca5a5;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 700;
+    }
+    .word-pill.cat-GIBBERISH span { background: rgba(139, 92, 246, 0.2); color: #c4b5fd; }
+    .word-pill.cat-REPETITION span { background: rgba(250, 204, 21, 0.2); color: #fde047; }
+
+    button { 
+      background: #3b82f6; 
+      color: white; 
+      border: none; 
+      padding: 12px; 
+      border-radius: 10px; 
+      font-size: 14px; 
+      font-weight: bold; 
+      cursor: pointer; 
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1); 
+      width: 100%; 
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3); 
+    }
+    button:hover { 
+      background: #2563eb; 
+      transform: translateY(-2px);
+    }
+    button.running { 
+      background: rgba(239, 68, 68, 0.1);
+      color: #ef4444;
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      box-shadow: none;
+    }
+    button.running:hover { 
+      background: rgba(239, 68, 68, 0.2); 
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h3>🎙️ Speech Coach</h3>
+    <p class="subtitle">Disfluency & Filler Word Analysis</p>
+    <div id="statusBadge" class="status-badge stopped">Stopped</div>
+  </div>
+
+  <div class="stats-card">
+    <div class="stats-grid">
+      <div class="stat">
+        <span class="stat-label">Total Gibberish</span>
+        <span id="totalGibberish" class="stat-val">0</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Total Repetitions</span>
+        <span id="totalRepetitions" class="stat-val">0</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Top Disfluency</span>
+        <span id="topDisfluency" class="stat-val">None</span>
+      </div>
+    </div>
+
+    <div class="top-words">
+      <div class="top-words-title">
+        <span>Detected Patterns</span>
+      </div>
+      <div id="topWordsList" class="word-list">
+        <!-- populated via js -->
+        <div class="word-pill" style="opacity: 0.5; background: none;">No data yet.</div>
+      </div>
+    </div>
+  </div>
+
+  <button id="toggleBtn">Start Coaching</button>
+  <button id="clearBtn" style="background: transparent; box-shadow: none; color: #64748b; font-size: 11px; margin-top: -6px; padding: 4px;">Reset Stats</button>
+
+  <script src="popup.js"></script>
+</body>
+</html>
